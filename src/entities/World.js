@@ -1,92 +1,81 @@
-import { Obstacle } from './Obstacle.js';
-
 export class World {
     constructor(game) {
         this.game = game;
-        this.obstacles = [];
-        this.speed = 250;
-        this.speedMultiplier = 1.0; // Modifier for Soar State
-        this.spawnTimer = 0;
-        this.spawnInterval = 2.5;
+        this.pipes = [];
+        this.timer = 0;
+        this.gap = 160;
+        this.pipeWidth = 60;
+    }
 
-        this.distance = 0;
+    reset() {
+        this.pipes = [];
+        this.timer = 0;
     }
 
     update(dt) {
-        // Move obstacles
-        // Increase base speed over distance?
-        const currentSpeed = (this.speed + (this.distance * 0.05)) * this.speedMultiplier;
-
-        this.distance += currentSpeed * dt * 0.01; // Fake meters
-
-        // Only spawn if game is playing
-        if (this.game.state === 'PLAYING') {
-            this.spawnTimer += dt;
-            // Adjusted interval
-            const adjustedInterval = this.spawnInterval / this.speedMultiplier;
-
-            if (this.spawnTimer >= adjustedInterval) {
-                this.spawnObstacle();
-                this.spawnTimer = 0;
-            }
-        } else if (this.game.state === 'INTRO') {
-            this.spawnTimer = 0;
+        this.timer += dt;
+        if (this.timer > 1.8) {
+            this.spawn();
+            this.timer = 0;
         }
 
-        // Update Obstacles
-        this.obstacles.forEach(ob => ob.update(dt, currentSpeed));
-
-        // Cull off-screen
-        this.obstacles = this.obstacles.filter(ob => !ob.markedForDeletion);
+        this.pipes.forEach(p => p.x -= 150 * dt);
+        this.pipes = this.pipes.filter(p => p.x + this.pipeWidth > 0);
     }
 
-    spawnObstacle() {
-        const minGapY = 150;
-        const maxGapY = this.game.height - 150;
-        const gapY = Math.random() * (maxGapY - minGapY) + minGapY;
-        const gapHeight = 220;
+    spawn() {
+        const minH = 50;
+        const available = this.game.height - 100 - this.gap - (minH * 2);
+        const topH = minH + Math.random() * available;
 
-        const obstacle = new Obstacle(
-            this.game,
-            this.game.width,
-            gapY,
-            gapHeight
-        );
+        this.pipes.push({
+            x: this.game.width,
+            topH: topH,
+            passed: false
+        });
+    }
 
-        // Inherit biome color
-        if (this.game.biomeManager && this.game.biomeManager.biomes) {
-            // Use interpolated color if available
-            if (this.game.biomeManager.currentObstacleColor) {
-                obstacle.color = this.game.biomeManager.currentObstacleColor;
-            } else {
-                const currentBiome = this.game.biomeManager.currentBiome;
-                obstacle.color = this.game.biomeManager.biomes[currentBiome].obstacleColor;
+    checkCollision(eagle) {
+        for (let p of this.pipes) {
+            // Check X intersection
+            if (eagle.x + eagle.radius > p.x && eagle.x - eagle.radius < p.x + this.pipeWidth) {
+                // Check Y intersection (hit top pipe OR hit bottom pipe)
+                if ((eagle.y - eagle.radius < p.topH) ||
+                    (eagle.y + eagle.radius > p.topH + this.gap)) {
+                    return true;
+                }
             }
-        }
 
-        this.obstacles.push(obstacle);
-    }
-
-    draw(ctx) {
-        this.obstacles.forEach(ob => ob.draw(ctx));
-    }
-
-    checkCollisions(eagle) {
-        for (const ob of this.obstacles) {
-            if (ob.checkCollision(eagle)) {
-                return true;
+            // Score
+            if (!p.passed && eagle.x > p.x + this.pipeWidth) {
+                p.passed = true;
+                this.game.score++;
             }
         }
         return false;
     }
 
-    checkGrazes(eagle) {
-        let count = 0;
-        for (const ob of this.obstacles) {
-            if (ob.checkGraze(eagle)) {
-                count++;
-            }
-        }
-        return count;
+    draw(ctx) {
+        ctx.fillStyle = '#73bf2e';
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+
+        this.pipes.forEach(p => {
+            // Top Pipe
+            ctx.fillRect(p.x, 0, this.pipeWidth, p.topH);
+            ctx.strokeRect(p.x, 0, this.pipeWidth, p.topH);
+
+            // Bottom Pipe
+            const botY = p.topH + this.gap;
+            const botH = this.game.height - 100 - botY;
+            ctx.fillRect(p.x, botY, this.pipeWidth, botH);
+            ctx.strokeRect(p.x, botY, this.pipeWidth, botH);
+        });
+
+        // Ground
+        ctx.fillStyle = '#ded895';
+        ctx.fillRect(0, this.game.height - 100, this.game.width, 100);
+        ctx.fillStyle = '#73bf2e';
+        ctx.fillRect(0, this.game.height - 100, this.game.width, 10);
     }
 }
