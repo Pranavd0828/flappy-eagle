@@ -56,8 +56,9 @@ export class World {
     }
 
     draw(ctx) {
-        ctx.fillStyle = '#73bf2e';
-        ctx.strokeStyle = '#333';
+        // Pipes
+        ctx.fillStyle = '#5a9e27'; // Slightly darker/warmer green
+        ctx.strokeStyle = '#2f5e1b';
         ctx.lineWidth = 2;
 
         this.pipes.forEach(p => {

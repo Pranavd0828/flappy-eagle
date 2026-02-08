@@ -1,6 +1,8 @@
 import { Input } from './Input.js';
 import { Eagle } from '../entities/Eagle.js';
 import { World } from '../entities/World.js';
+import { PersonaSystem } from '../systems/PersonaSystem.js';
+import { AudioSynth } from './AudioSynth.js';
 
 export class Game {
     constructor() {
@@ -13,6 +15,8 @@ export class Game {
         this.input = new Input();
         this.eagle = new Eagle(this);
         this.world = new World(this);
+        this.persona = new PersonaSystem(this);
+        this.audio = new AudioSynth();
 
         this.state = 'READY'; // READY, PLAY, OVER
         this.score = 0;
@@ -43,36 +47,38 @@ export class Game {
 
     update(dt) {
         if (this.state === 'READY') {
-            // Hover eagle
             this.eagle.y = this.height / 2 + Math.sin(Date.now() / 300) * 5;
+            this.persona.update(dt); // Show vibe on ready screen too
 
             if (this.input.check()) {
+                this.audio.init();
                 this.state = 'PLAY';
                 this.eagle.flap();
+                this.audio.playFlap(this.persona.currentPersona);
             }
         }
         else if (this.state === 'PLAY') {
-            // Update Entities
             const hitGround = this.eagle.update(dt);
             this.world.update(dt);
+            this.persona.update(dt);
 
-            // Inputs
             if (this.input.check()) {
                 this.eagle.flap();
+                this.persona.onFlap();
+                this.audio.playFlap(this.persona.currentPersona);
             }
 
-            // Collisions
             if (hitGround || this.world.checkCollision(this.eagle)) {
                 this.state = 'OVER';
+                this.audio.playCrash();
             }
         }
         else if (this.state === 'OVER') {
-            // Fall to ground
             if (this.eagle.y < this.height - 100 - this.eagle.radius) {
                 this.eagle.update(dt);
             }
+            this.persona.update(dt);
 
-            // Restart
             if (this.input.check()) {
                 this.reset();
             }
@@ -87,39 +93,65 @@ export class Game {
     }
 
     draw() {
-        // Clear
-        this.ctx.fillStyle = '#70c5ce';
-        this.ctx.fillRect(0, 0, this.width, this.height);
+        // Draw AI Background
+        this.persona.draw(this.ctx);
 
         // Draw Game
         this.world.draw(this.ctx);
         this.eagle.draw(this.ctx);
 
-        // Draw UI
-        this.ctx.fillStyle = 'white';
-        this.ctx.strokeStyle = 'black';
-        this.ctx.lineWidth = 3;
+        // UI
         this.ctx.textAlign = 'center';
 
         if (this.state === 'READY') {
-            this.ctx.font = '50px Arial';
-            this.ctx.strokeText('GET READY', this.width / 2, this.height / 3);
+            this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            this.ctx.fillRect(this.width / 2 - 150, this.height / 3 - 60, 300, 150);
+
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = 'bold 50px Arial';
             this.ctx.fillText('GET READY', this.width / 2, this.height / 3);
-            this.ctx.font = '30px Arial';
+
+            this.ctx.font = '20px Arial';
             this.ctx.fillText('Tap to Fly', this.width / 2, this.height / 3 + 50);
         }
         else if (this.state === 'PLAY') {
-            this.ctx.font = '60px Arial';
+            this.ctx.fillStyle = 'white';
+            this.ctx.strokeStyle = 'black';
+            this.ctx.lineWidth = 4;
+            this.ctx.font = 'bold 60px Arial';
             this.ctx.strokeText(this.score, this.width / 2, 100);
             this.ctx.fillText(this.score, this.width / 2, 100);
         }
         else if (this.state === 'OVER') {
-            this.ctx.font = '50px Arial';
-            this.ctx.strokeText('GAME OVER', this.width / 2, this.height / 3);
+            // Draw Dark Overlay for Readability
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // 70% opacity black
+            this.ctx.fillRect(0, 0, this.width, this.height);
+
+            // Game Over Text
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = 'bold 50px Arial';
             this.ctx.fillText('GAME OVER', this.width / 2, this.height / 3);
+
+            // Score
             this.ctx.font = '30px Arial';
             this.ctx.fillText(`Score: ${this.score}`, this.width / 2, this.height / 3 + 60);
-            this.ctx.fillText('Tap to Restart', this.width / 2, this.height / 3 + 120);
+
+            // AI Analysis Output (Multi-line)
+            this.ctx.font = 'bold 18px monospace';
+            this.ctx.fillStyle = '#facc15'; // Gold (Readable on black)
+
+            const profile = this.persona.getPsychProfile();
+            const lines = profile.split('\n');
+            let lineY = this.height / 3 + 120;
+
+            lines.forEach(line => {
+                this.ctx.fillText(line, this.width / 2, lineY);
+                lineY += 30;
+            });
+
+            this.ctx.fillStyle = '#cccccc';
+            this.ctx.font = '20px Arial';
+            this.ctx.fillText('Tap to Restart', this.width / 2, lineY + 60);
         }
     }
 }
